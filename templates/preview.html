@@ -1,0 +1,59 @@
+{{define "title"}}Preview - {{.URL}}{{end}}
+{{define "content"}}
+<h1>Configure Feed</h1>
+<p>Source: <a href="{{.URL}}" target="_blank">{{.URL}}</a></p>
+
+<form action="/feeds" method="POST">
+    <input type="hidden" name="url" value="{{.URL}}">
+
+    <label for="name">Feed Name</label>
+    <input type="text" id="name" name="name" placeholder="My Blog Feed" required>
+
+    <label for="item_selector">Item Selector <small>(CSS selector for repeating items)</small></label>
+    <input type="text" id="item_selector" name="item_selector" placeholder="article, .post, li" required>
+
+    <label for="title_selector">Title Selector <small>(relative to each item)</small></label>
+    <input type="text" id="title_selector" name="title_selector" placeholder="h2, .title, a" required>
+    <input type="text" name="title_regex" placeholder="Optional regex with capture group" class="regex-input">
+
+    <label for="link_selector">Link Selector <small>(element with href, relative to each item)</small></label>
+    <input type="text" id="link_selector" name="link_selector" placeholder="a, h2 a" required>
+    <input type="text" name="link_regex" placeholder="Optional regex with capture group" class="regex-input">
+
+    <label for="description_selector">Description Selector <small>(relative to each item)</small></label>
+    <input type="text" id="description_selector" name="description_selector" placeholder="p, .summary, .excerpt">
+    <input type="text" name="description_regex" placeholder="Optional regex with capture group" class="regex-input">
+
+    <label for="pub_date_selector">Published Date Selector <small>(relative to each item)</small></label>
+    <input type="text" id="pub_date_selector" name="pub_date_selector" placeholder="time, .date, .published">
+    <input type="text" name="pub_date_regex" placeholder="Optional regex with capture group, e.g. (\d{4}-\d{2}-\d{2})" class="regex-input">
+
+    <label for="refresh_minutes">Refresh Interval (minutes)</label>
+    <input type="number" id="refresh_minutes" name="refresh_minutes" value="60" min="5" required>
+
+    <div class="button-group">
+        <button type="button" id="test-btn">Test Selectors</button>
+        <button type="submit">Save Feed</button>
+    </div>
+</form>
+
+<div id="preview-results"></div>
+
+<script>
+document.getElementById('test-btn').addEventListener('click', function() {
+    const form = this.closest('form');
+    const data = new URLSearchParams(new FormData(form));
+    const results = document.getElementById('preview-results');
+    results.innerHTML = '<p>Loading...</p>';
+
+    fetch('/preview/test', {
+        method: 'POST',
+        body: data,
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'}
+    })
+    .then(r => r.text())
+    .then(html => results.innerHTML = html)
+    .catch(err => results.innerHTML = '<p class="error">Error: ' + err.message + '</p>');
+});
+</script>
+{{end}}

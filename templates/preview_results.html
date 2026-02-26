@@ -1,0 +1,25 @@
+<h2>Preview Results ({{.Count}} items found)</h2>
+{{if .Items}}
+<table>
+    <thead>
+        <tr>
+            <th>Title</th>
+            <th>Link</th>
+            <th>Description</th>
+            <th>Published</th>
+        </tr>
+    </thead>
+    <tbody>
+        {{range .Items}}
+        <tr>
+            <td>{{.Title}}</td>
+            <td>{{if .Link}}<a href="{{.Link}}" target="_blank">{{.Link}}</a>{{end}}</td>
+            <td>{{.Description}}</td>
+            <td>{{.PubDate}}</td>
+        </tr>
+        {{end}}
+    </tbody>
+</table>
+{{else}}
+<p>No items matched the selectors. Try adjusting them.</p>
+{{end}}

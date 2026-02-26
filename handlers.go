@@ -1,0 +1,209 @@
+package main
+
+import (
+	"fmt"
+	"html/template"
+	"log"
+	"net/http"
+	"strconv"
+)
+
+var pageTmpl map[string]*template.Template
+
+func initTemplates() {
+	layout := "templates/layout.html"
+	pageTmpl = map[string]*template.Template{
+		"index":          template.Must(template.ParseFiles(layout, "templates/index.html")),
+		"preview":        template.Must(template.ParseFiles(layout, "templates/preview.html")),
+		"feeds":          template.Must(template.ParseFiles(layout, "templates/feeds.html")),
+		"feed_detail":    template.Must(template.ParseFiles(layout, "templates/feed_detail.html")),
+		"preview_results": template.Must(template.ParseFiles("templates/preview_results.html")),
+	}
+}
+
+func renderPage(w http.ResponseWriter, page string, data any) {
+	tmpl, ok := pageTmpl[page]
+	if !ok {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	// For partial templates (no layout), execute by template name
+	if page == "preview_results" {
+		err := tmpl.Execute(w, data)
+		if err != nil {
+			log.Printf("template error: %v", err)
+		}
+		return
+	}
+	err := tmpl.ExecuteTemplate(w, "layout.html", data)
+	if err != nil {
+		log.Printf("template error: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
+}
+
+func handleIndex(w http.ResponseWriter, r *http.Request) {
+	renderPage(w, "index", nil)
+}
+
+func handlePreview(w http.ResponseWriter, r *http.Request) {
+	sourceURL := r.FormValue("url")
+	if sourceURL == "" {
+		http.Error(w, "URL is required", http.StatusBadRequest)
+		return
+	}
+
+	data := struct{ URL string }{URL: sourceURL}
+	renderPage(w, "preview", data)
+}
+
+func handlePreviewTest(w http.ResponseWriter, r *http.Request) {
+	sourceURL := r.FormValue("url")
+	itemSel := r.FormValue("item_selector")
+	titleSel := r.FormValue("title_selector")
+	linkSel := r.FormValue("link_selector")
+	descSel := r.FormValue("description_selector")
+	pubDateSel := r.FormValue("pub_date_selector")
+	regexes := SelectorRegexes{
+		Title:       r.FormValue("title_regex"),
+		Link:        r.FormValue("link_regex"),
+		Description: r.FormValue("description_regex"),
+		PubDate:     r.FormValue("pub_date_regex"),
+	}
+
+	if sourceURL == "" || itemSel == "" {
+		http.Error(w, "URL and item selector are required", http.StatusBadRequest)
+		return
+	}
+
+	items, err := FetchAndParse(sourceURL, itemSel, titleSel, linkSel, descSel, pubDateSel, regexes)
+	if err != nil {
+		fmt.Fprintf(w, `<p class="error">Error: %s</p>`, template.HTMLEscapeString(err.Error()))
+		return
+	}
+
+	data := struct {
+		Items []FeedItem
+		Count int
+	}{Items: items, Count: len(items)}
+
+	renderPage(w, "preview_results", data)
+}
+
+func handleCreateFeed(w http.ResponseWriter, r *http.Request) {
+	refreshMinutes, _ := strconv.Atoi(r.FormValue("refresh_minutes"))
+	if refreshMinutes < 5 {
+		refreshMinutes = 60
+	}
+
+	f := &Feed{
+		Name:                r.FormValue("name"),
+		URL:                 r.FormValue("url"),
+		ItemSelector:        r.FormValue("item_selector"),
+		TitleSelector:       r.FormValue("title_selector"),
+		LinkSelector:        r.FormValue("link_selector"),
+		DescriptionSelector: r.FormValue("description_selector"),
+		PubDateSelector:     r.FormValue("pub_date_selector"),
+		TitleRegex:          r.FormValue("title_regex"),
+		LinkRegex:           r.FormValue("link_regex"),
+		DescriptionRegex:    r.FormValue("description_regex"),
+		PubDateRegex:        r.FormValue("pub_date_regex"),
+		RefreshMinutes:      refreshMinutes,
+	}
+
+	if f.Name == "" || f.URL == "" || f.ItemSelector == "" {
+		http.Error(w, "Name, URL, and item selector are required", http.StatusBadRequest)
+		return
+	}
+
+	// Generate initial RSS
+	regexes := SelectorRegexes{
+		Title:       f.TitleRegex,
+		Link:        f.LinkRegex,
+		Description: f.DescriptionRegex,
+		PubDate:     f.PubDateRegex,
+	}
+	items, err := FetchAndParse(f.URL, f.ItemSelector, f.TitleSelector, f.LinkSelector, f.DescriptionSelector, f.PubDateSelector, regexes)
+	if err != nil {
+		http.Error(w, "Failed to fetch URL: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	rssXML, err := GenerateRSS(f.Name, f.URL, items)
+	if err != nil {
+		http.Error(w, "Failed to generate RSS: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	f.CachedRSS = rssXML
+
+	id, err := CreateFeed(f)
+	if err != nil {
+		http.Error(w, "Failed to save feed: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	UpdateFeedCache(id, rssXML)
+
+	http.Redirect(w, r, fmt.Sprintf("/feeds/%d", id), http.StatusSeeOther)
+}
+
+func handleListFeeds(w http.ResponseWriter, r *http.Request) {
+	feeds, err := ListFeeds()
+	if err != nil {
+		http.Error(w, "Failed to list feeds: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	data := struct{ Feeds []Feed }{Feeds: feeds}
+	renderPage(w, "feeds", data)
+}
+
+func handleFeedDetail(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid feed ID", http.StatusBadRequest)
+		return
+	}
+
+	feed, err := GetFeed(id)
+	if err != nil {
+		http.Error(w, "Feed not found", http.StatusNotFound)
+		return
+	}
+
+	data := struct{ Feed *Feed }{Feed: feed}
+	renderPage(w, "feed_detail", data)
+}
+
+func handleFeedRSS(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid feed ID", http.StatusBadRequest)
+		return
+	}
+
+	feed, err := GetFeed(id)
+	if err != nil {
+		http.Error(w, "Feed not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/rss+xml; charset=utf-8")
+	w.Write([]byte(feed.CachedRSS))
+}
+
+func handleDeleteFeed(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid feed ID", http.StatusBadRequest)
+		return
+	}
+
+	err = DeleteFeed(id)
+	if err != nil {
+		http.Error(w, "Failed to delete feed", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}

@@ -1,0 +1,10 @@
+{{define "title"}}RSS Feed Generator{{end}}
+{{define "content"}}
+<h1>RSS Feed Generator</h1>
+<p>Enter a website URL to create an RSS feed from its content.</p>
+<form action="/preview" method="POST">
+    <label for="url">Website URL</label>
+    <input type="url" id="url" name="url" placeholder="https://example.com/blog" required>
+    <button type="submit">Fetch &amp; Preview</button>
+</form>
+{{end}}

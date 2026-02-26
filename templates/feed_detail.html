@@ -1,0 +1,52 @@
+{{define "title"}}{{.Feed.Name}}{{end}}
+{{define "content"}}
+<p><a href="/feeds">&larr; Back to Feeds</a></p>
+
+<h1>{{.Feed.Name}}</h1>
+
+<dl>
+    <dt>Source URL</dt>
+    <dd><a href="{{.Feed.URL}}" target="_blank">{{.Feed.URL}}</a></dd>
+
+    <dt>RSS Feed URL</dt>
+    <dd><a href="/feeds/{{.Feed.ID}}/rss">/feeds/{{.Feed.ID}}/rss</a></dd>
+
+    <dt>Item Selector</dt>
+    <dd><code>{{.Feed.ItemSelector}}</code></dd>
+
+    <dt>Title Selector</dt>
+    <dd><code>{{.Feed.TitleSelector}}</code>{{if .Feed.TitleRegex}} &rarr; regex <code>{{.Feed.TitleRegex}}</code>{{end}}</dd>
+
+    <dt>Link Selector</dt>
+    <dd><code>{{.Feed.LinkSelector}}</code>{{if .Feed.LinkRegex}} &rarr; regex <code>{{.Feed.LinkRegex}}</code>{{end}}</dd>
+
+    <dt>Description Selector</dt>
+    <dd><code>{{.Feed.DescriptionSelector}}</code>{{if .Feed.DescriptionRegex}} &rarr; regex <code>{{.Feed.DescriptionRegex}}</code>{{end}}</dd>
+
+    <dt>Published Date Selector</dt>
+    <dd><code>{{.Feed.PubDateSelector}}</code>{{if .Feed.PubDateRegex}} &rarr; regex <code>{{.Feed.PubDateRegex}}</code>{{end}}</dd>
+
+    <dt>Refresh Interval</dt>
+    <dd>{{.Feed.RefreshMinutes}} minutes</dd>
+
+    <dt>Last Refreshed</dt>
+    <dd>{{if .Feed.LastRefreshed}}{{.Feed.LastRefreshed.Format "2006-01-02 15:04:05"}}{{else}}Never{{end}}</dd>
+
+    <dt>Created</dt>
+    <dd>{{.Feed.CreatedAt.Format "2006-01-02 15:04:05"}}</dd>
+</dl>
+
+<div class="button-group">
+    <a href="/feeds">Back to Feeds</a>
+    <button onclick="deleteFeed({{.Feed.ID}})" class="delete-btn">Delete Feed</button>
+</div>
+
+<script>
+function deleteFeed(id) {
+    if (!confirm('Delete this feed?')) return;
+    fetch('/feeds/' + id, {method: 'DELETE'})
+        .then(() => location.href = '/feeds')
+        .catch(err => alert('Error: ' + err.message));
+}
+</script>
+{{end}}

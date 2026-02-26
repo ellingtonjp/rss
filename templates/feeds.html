@@ -1,0 +1,42 @@
+{{define "title"}}My Feeds{{end}}
+{{define "content"}}
+<h1>My Feeds</h1>
+{{if .Feeds}}
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Source URL</th>
+            <th>Refresh</th>
+            <th>Last Refreshed</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {{range .Feeds}}
+        <tr>
+            <td><a href="/feeds/{{.ID}}">{{.Name}}</a></td>
+            <td><a href="{{.URL}}" target="_blank">{{.URL}}</a></td>
+            <td>{{.RefreshMinutes}}m</td>
+            <td>{{if .LastRefreshed}}{{.LastRefreshed.Format "2006-01-02 15:04"}}{{else}}Never{{end}}</td>
+            <td>
+                <a href="/feeds/{{.ID}}/rss">RSS</a>
+                <button onclick="deleteFeed({{.ID}})" class="delete-btn">Delete</button>
+            </td>
+        </tr>
+        {{end}}
+    </tbody>
+</table>
+{{else}}
+<p>No feeds yet. <a href="/">Create one</a>.</p>
+{{end}}
+
+<script>
+function deleteFeed(id) {
+    if (!confirm('Delete this feed?')) return;
+    fetch('/feeds/' + id, {method: 'DELETE'})
+        .then(() => location.reload())
+        .catch(err => alert('Error: ' + err.message));
+}
+</script>
+{{end}}
