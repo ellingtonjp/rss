@@ -1,0 +1,61 @@
+{{define "title"}}Edit - {{.Feed.Name}}{{end}}
+{{define "content"}}
+<p><a href="/feeds/{{.Feed.ID}}">&larr; Back to Feed</a></p>
+
+<h1>Edit Feed</h1>
+
+<form action="/feeds/{{.Feed.ID}}/edit" method="POST">
+    <label for="name">Feed Name</label>
+    <input type="text" id="name" name="name" value="{{.Feed.Name}}" required>
+
+    <label for="url">Source URL</label>
+    <input type="url" id="url" name="url" value="{{.Feed.URL}}" required>
+
+    <label for="item_selector">Item Selector <small>(CSS selector for repeating items)</small></label>
+    <input type="text" id="item_selector" name="item_selector" value="{{.Feed.ItemSelector}}" required>
+
+    <label for="title_selector">Title Selector <small>(relative to each item)</small></label>
+    <input type="text" id="title_selector" name="title_selector" value="{{.Feed.TitleSelector}}" required>
+    <input type="text" name="title_regex" value="{{.Feed.TitleRegex}}" placeholder="Optional regex with capture group" class="regex-input">
+
+    <label for="link_selector">Link Selector <small>(element with href, relative to each item)</small></label>
+    <input type="text" id="link_selector" name="link_selector" value="{{.Feed.LinkSelector}}" required>
+    <input type="text" name="link_regex" value="{{.Feed.LinkRegex}}" placeholder="Optional regex with capture group" class="regex-input">
+
+    <label for="description_selector">Description Selector <small>(relative to each item)</small></label>
+    <input type="text" id="description_selector" name="description_selector" value="{{.Feed.DescriptionSelector}}">
+    <input type="text" name="description_regex" value="{{.Feed.DescriptionRegex}}" placeholder="Optional regex with capture group" class="regex-input">
+
+    <label for="pub_date_selector">Published Date Selector <small>(relative to each item)</small></label>
+    <input type="text" id="pub_date_selector" name="pub_date_selector" value="{{.Feed.PubDateSelector}}">
+    <input type="text" name="pub_date_regex" value="{{.Feed.PubDateRegex}}" placeholder="Optional regex with capture group" class="regex-input">
+
+    <label for="refresh_minutes">Refresh Interval (minutes)</label>
+    <input type="number" id="refresh_minutes" name="refresh_minutes" value="{{.Feed.RefreshMinutes}}" min="1" required>
+
+    <div class="button-group">
+        <button type="button" id="test-btn">Test Selectors</button>
+        <button type="submit">Save Changes</button>
+    </div>
+</form>
+
+<div id="preview-results"></div>
+
+<script>
+document.getElementById('test-btn').addEventListener('click', function() {
+    const form = this.closest('form');
+    const data = new URLSearchParams(new FormData(form));
+    const results = document.getElementById('preview-results');
+    results.innerHTML = '<p>Loading...</p>';
+
+    fetch('/preview/test', {
+        method: 'POST',
+        body: data,
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'}
+    })
+    .then(r => r.text())
+    .then(html => results.innerHTML = html)
+    .catch(err => results.innerHTML = '<p class="error">Error: ' + err.message + '</p>');
+});
+</script>
+{{end}}

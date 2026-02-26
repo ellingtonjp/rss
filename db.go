@@ -128,10 +128,23 @@ func DeleteFeed(id int64) error {
 	return err
 }
 
+func UpdateFeed(f *Feed) error {
+	_, err := db.Exec(
+		`UPDATE feeds SET name = ?, url = ?, item_selector = ?, title_selector = ?, link_selector = ?,
+		 description_selector = ?, pub_date_selector = ?, title_regex = ?, link_regex = ?,
+		 description_regex = ?, pub_date_regex = ?, refresh_minutes = ?
+		 WHERE id = ?`,
+		f.Name, f.URL, f.ItemSelector, f.TitleSelector, f.LinkSelector,
+		f.DescriptionSelector, f.PubDateSelector, f.TitleRegex, f.LinkRegex,
+		f.DescriptionRegex, f.PubDateRegex, f.RefreshMinutes, f.ID,
+	)
+	return err
+}
+
 func UpdateFeedCache(id int64, rssXML string) error {
 	_, err := db.Exec(
 		`UPDATE feeds SET cached_rss = ?, last_refreshed = ? WHERE id = ?`,
-		rssXML, time.Now(), id,
+		rssXML, time.Now().UTC().Format("2006-01-02 15:04:05"), id,
 	)
 	return err
 }

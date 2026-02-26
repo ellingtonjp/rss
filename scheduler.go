@@ -21,6 +21,12 @@ func refreshDueFeeds() {
 		return
 	}
 
+	if len(feeds) == 0 {
+		log.Printf("scheduler: no feeds due for refresh")
+		return
+	}
+
+	log.Printf("scheduler: %d feed(s) due for refresh", len(feeds))
 	for _, f := range feeds {
 		regexes := SelectorRegexes{
 			Title:       f.TitleRegex,

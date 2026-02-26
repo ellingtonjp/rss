@@ -1,11 +1,13 @@
 package main
 
 import (
+	"encoding/xml"
 	"fmt"
 	"html/template"
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 )
 
 var pageTmpl map[string]*template.Template
@@ -17,6 +19,7 @@ func initTemplates() {
 		"preview":        template.Must(template.ParseFiles(layout, "templates/preview.html")),
 		"feeds":          template.Must(template.ParseFiles(layout, "templates/feeds.html")),
 		"feed_detail":    template.Must(template.ParseFiles(layout, "templates/feed_detail.html")),
+		"feed_edit":      template.Must(template.ParseFiles(layout, "templates/feed_edit.html")),
 		"preview_results": template.Must(template.ParseFiles("templates/preview_results.html")),
 	}
 }
@@ -92,7 +95,7 @@ func handlePreviewTest(w http.ResponseWriter, r *http.Request) {
 
 func handleCreateFeed(w http.ResponseWriter, r *http.Request) {
 	refreshMinutes, _ := strconv.Atoi(r.FormValue("refresh_minutes"))
-	if refreshMinutes < 5 {
+	if refreshMinutes < 1 {
 		refreshMinutes = 60
 	}
 
@@ -175,6 +178,80 @@ func handleFeedDetail(w http.ResponseWriter, r *http.Request) {
 	renderPage(w, "feed_detail", data)
 }
 
+func handleEditFeed(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid feed ID", http.StatusBadRequest)
+		return
+	}
+
+	feed, err := GetFeed(id)
+	if err != nil {
+		http.Error(w, "Feed not found", http.StatusNotFound)
+		return
+	}
+
+	data := struct{ Feed *Feed }{Feed: feed}
+	renderPage(w, "feed_edit", data)
+}
+
+func handleUpdateFeed(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid feed ID", http.StatusBadRequest)
+		return
+	}
+
+	refreshMinutes, _ := strconv.Atoi(r.FormValue("refresh_minutes"))
+	if refreshMinutes < 1 {
+		refreshMinutes = 60
+	}
+
+	f := &Feed{
+		ID:                  id,
+		Name:                r.FormValue("name"),
+		URL:                 r.FormValue("url"),
+		ItemSelector:        r.FormValue("item_selector"),
+		TitleSelector:       r.FormValue("title_selector"),
+		LinkSelector:        r.FormValue("link_selector"),
+		DescriptionSelector: r.FormValue("description_selector"),
+		PubDateSelector:     r.FormValue("pub_date_selector"),
+		TitleRegex:          r.FormValue("title_regex"),
+		LinkRegex:           r.FormValue("link_regex"),
+		DescriptionRegex:    r.FormValue("description_regex"),
+		PubDateRegex:        r.FormValue("pub_date_regex"),
+		RefreshMinutes:      refreshMinutes,
+	}
+
+	if f.Name == "" || f.URL == "" || f.ItemSelector == "" {
+		http.Error(w, "Name, URL, and item selector are required", http.StatusBadRequest)
+		return
+	}
+
+	err = UpdateFeed(f)
+	if err != nil {
+		http.Error(w, "Failed to update feed: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Regenerate RSS with new settings
+	regexes := SelectorRegexes{
+		Title:       f.TitleRegex,
+		Link:        f.LinkRegex,
+		Description: f.DescriptionRegex,
+		PubDate:     f.PubDateRegex,
+	}
+	items, err := FetchAndParse(f.URL, f.ItemSelector, f.TitleSelector, f.LinkSelector, f.DescriptionSelector, f.PubDateSelector, regexes)
+	if err == nil {
+		rssXML, err := GenerateRSS(f.Name, f.URL, items)
+		if err == nil {
+			UpdateFeedCache(id, rssXML)
+		}
+	}
+
+	http.Redirect(w, r, fmt.Sprintf("/feeds/%d", id), http.StatusSeeOther)
+}
+
 func handleFeedRSS(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
@@ -190,6 +267,65 @@ func handleFeedRSS(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/rss+xml; charset=utf-8")
 	w.Write([]byte(feed.CachedRSS))
+}
+
+type opmlXML struct {
+	XMLName xml.Name    `xml:"opml"`
+	Version string      `xml:"version,attr"`
+	Head    opmlHead    `xml:"head"`
+	Body    opmlBody    `xml:"body"`
+}
+
+type opmlHead struct {
+	Title       string `xml:"title"`
+	DateCreated string `xml:"dateCreated"`
+}
+
+type opmlBody struct {
+	Outlines []opmlOutline `xml:"outline"`
+}
+
+type opmlOutline struct {
+	Text   string `xml:"text,attr"`
+	Title  string `xml:"title,attr"`
+	Type   string `xml:"type,attr"`
+	XMLURL string `xml:"xmlUrl,attr"`
+	HTMLURL string `xml:"htmlUrl,attr"`
+}
+
+func handleOPML(w http.ResponseWriter, r *http.Request) {
+	feeds, err := ListFeeds()
+	if err != nil {
+		http.Error(w, "Failed to list feeds: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	outlines := make([]opmlOutline, len(feeds))
+	for i, f := range feeds {
+		outlines[i] = opmlOutline{
+			Text:    f.Name,
+			Title:   f.Name,
+			Type:    "rss",
+			XMLURL:  fmt.Sprintf("http://%s/feeds/%d/rss", r.Host, f.ID),
+			HTMLURL: f.URL,
+		}
+	}
+
+	doc := opmlXML{
+		Version: "2.0",
+		Head: opmlHead{
+			Title:       "RSS Feed Generator",
+			DateCreated: time.Now().UTC().Format(time.RFC1123Z),
+		},
+		Body: opmlBody{Outlines: outlines},
+	}
+
+	w.Header().Set("Content-Type", "text/x-opml; charset=utf-8")
+	w.Header().Set("Content-Disposition", `attachment; filename="feeds.opml"`)
+	w.Write([]byte(xml.Header))
+	enc := xml.NewEncoder(w)
+	enc.Indent("", "  ")
+	enc.Encode(doc)
 }
 
 func handleDeleteFeed(w http.ResponseWriter, r *http.Request) {
