@@ -5,6 +5,13 @@
 <h1>{{.Feed.Name}}</h1>
 
 <dl>
+    {{if eq .Feed.FeedType "rss"}}
+    <dt>Type</dt>
+    <dd>Standard RSS Feed</dd>
+
+    <dt>RSS Feed URL</dt>
+    <dd><a href="{{.Feed.RSSURL}}" target="_blank">{{.Feed.RSSURL}}</a></dd>
+    {{else}}
     <dt>Source URL</dt>
     <dd><a href="{{.Feed.URL}}" target="_blank">{{.Feed.URL}}</a></dd>
 
@@ -31,6 +38,7 @@
 
     <dt>Last Refreshed</dt>
     <dd>{{if .Feed.LastRefreshed}}{{.Feed.LastRefreshed.Format "2006-01-02 15:04:05"}}{{else}}Never{{end}}</dd>
+    {{end}}
 
     <dt>Created</dt>
     <dd>{{.Feed.CreatedAt.Format "2006-01-02 15:04:05"}}</dd>

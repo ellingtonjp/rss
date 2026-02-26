@@ -32,6 +32,7 @@ func main() {
 	mux.HandleFunc("POST /preview", handlePreview)
 	mux.HandleFunc("POST /preview/test", handlePreviewTest)
 	mux.HandleFunc("POST /feeds", handleCreateFeed)
+	mux.HandleFunc("POST /feeds/rss", handleCreateRSSFeed)
 	mux.HandleFunc("GET /feeds", handleListFeeds)
 	mux.HandleFunc("GET /feeds/opml", handleOPML)
 	mux.HandleFunc("GET /feeds/{id}", handleFeedDetail)

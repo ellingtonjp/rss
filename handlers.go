@@ -20,6 +20,7 @@ func initTemplates() {
 		"feeds":          template.Must(template.ParseFiles(layout, "templates/feeds.html")),
 		"feed_detail":    template.Must(template.ParseFiles(layout, "templates/feed_detail.html")),
 		"feed_edit":      template.Must(template.ParseFiles(layout, "templates/feed_edit.html")),
+		"feed_edit_rss":  template.Must(template.ParseFiles(layout, "templates/feed_edit_rss.html")),
 		"preview_results": template.Must(template.ParseFiles("templates/preview_results.html")),
 	}
 }
@@ -150,6 +151,31 @@ func handleCreateFeed(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, fmt.Sprintf("/feeds/%d", id), http.StatusSeeOther)
 }
 
+func handleCreateRSSFeed(w http.ResponseWriter, r *http.Request) {
+	name := r.FormValue("name")
+	rssURL := r.FormValue("rss_url")
+
+	if name == "" || rssURL == "" {
+		http.Error(w, "Name and RSS URL are required", http.StatusBadRequest)
+		return
+	}
+
+	f := &Feed{
+		Name:     name,
+		URL:      rssURL,
+		FeedType: "rss",
+		RSSURL:   rssURL,
+	}
+
+	id, err := CreateFeed(f)
+	if err != nil {
+		http.Error(w, "Failed to save feed: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	http.Redirect(w, r, fmt.Sprintf("/feeds/%d", id), http.StatusSeeOther)
+}
+
 func handleListFeeds(w http.ResponseWriter, r *http.Request) {
 	feeds, err := ListFeeds()
 	if err != nil {
@@ -192,13 +218,43 @@ func handleEditFeed(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := struct{ Feed *Feed }{Feed: feed}
-	renderPage(w, "feed_edit", data)
+	if feed.FeedType == "rss" {
+		renderPage(w, "feed_edit_rss", data)
+	} else {
+		renderPage(w, "feed_edit", data)
+	}
 }
 
 func handleUpdateFeed(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid feed ID", http.StatusBadRequest)
+		return
+	}
+
+	// Check existing feed to determine type
+	existing, err := GetFeed(id)
+	if err != nil {
+		http.Error(w, "Feed not found", http.StatusNotFound)
+		return
+	}
+
+	if existing.FeedType == "rss" {
+		name := r.FormValue("name")
+		rssURL := r.FormValue("rss_url")
+		if name == "" || rssURL == "" {
+			http.Error(w, "Name and RSS URL are required", http.StatusBadRequest)
+			return
+		}
+		existing.Name = name
+		existing.RSSURL = rssURL
+		existing.URL = rssURL
+		err = UpdateFeed(existing)
+		if err != nil {
+			http.Error(w, "Failed to update feed: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		http.Redirect(w, r, fmt.Sprintf("/feeds/%d", id), http.StatusSeeOther)
 		return
 	}
 
@@ -211,6 +267,7 @@ func handleUpdateFeed(w http.ResponseWriter, r *http.Request) {
 		ID:                  id,
 		Name:                r.FormValue("name"),
 		URL:                 r.FormValue("url"),
+		FeedType:            "scrape",
 		ItemSelector:        r.FormValue("item_selector"),
 		TitleSelector:       r.FormValue("title_selector"),
 		LinkSelector:        r.FormValue("link_selector"),
@@ -302,11 +359,15 @@ func handleOPML(w http.ResponseWriter, r *http.Request) {
 
 	outlines := make([]opmlOutline, len(feeds))
 	for i, f := range feeds {
+		xmlURL := fmt.Sprintf("http://%s/feeds/%d/rss", r.Host, f.ID)
+		if f.FeedType == "rss" {
+			xmlURL = f.RSSURL
+		}
 		outlines[i] = opmlOutline{
 			Text:    f.Name,
 			Title:   f.Name,
 			Type:    "rss",
-			XMLURL:  fmt.Sprintf("http://%s/feeds/%d/rss", r.Host, f.ID),
+			XMLURL:  xmlURL,
 			HTMLURL: f.URL,
 		}
 	}

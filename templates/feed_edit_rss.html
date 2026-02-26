@@ -1,0 +1,18 @@
+{{define "title"}}Edit - {{.Feed.Name}}{{end}}
+{{define "content"}}
+<p><a href="/feeds/{{.Feed.ID}}">&larr; Back to Feed</a></p>
+
+<h1>Edit RSS Feed</h1>
+
+<form action="/feeds/{{.Feed.ID}}/edit" method="POST">
+    <label for="name">Feed Name</label>
+    <input type="text" id="name" name="name" value="{{.Feed.Name}}" required>
+
+    <label for="rss_url">RSS Feed URL</label>
+    <input type="url" id="rss_url" name="rss_url" value="{{.Feed.RSSURL}}" required>
+
+    <div class="button-group">
+        <button type="submit">Save Changes</button>
+    </div>
+</form>
+{{end}}

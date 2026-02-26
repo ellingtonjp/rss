@@ -1,10 +1,22 @@
 {{define "title"}}RSS Feed Generator{{end}}
 {{define "content"}}
 <h1>RSS Feed Generator</h1>
+
+<h2>Scrape a Website</h2>
 <p>Enter a website URL to create an RSS feed from its content.</p>
 <form action="/preview" method="POST">
     <label for="url">Website URL</label>
     <input type="url" id="url" name="url" placeholder="https://example.com/blog" required>
     <button type="submit">Fetch &amp; Preview</button>
+</form>
+
+<h2>Add an Existing RSS Feed</h2>
+<p>Add a standard RSS feed URL to track alongside your scraped feeds.</p>
+<form action="/feeds/rss" method="POST">
+    <label for="rss_name">Feed Name</label>
+    <input type="text" id="rss_name" name="name" placeholder="My Favorite Blog" required>
+    <label for="rss_url">RSS Feed URL</label>
+    <input type="url" id="rss_url" name="rss_url" placeholder="https://example.com/feed.xml" required>
+    <button type="submit">Add Feed</button>
 </form>
 {{end}}

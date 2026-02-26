@@ -11,6 +11,8 @@ type Feed struct {
 	ID                  int64
 	Name                string
 	URL                 string
+	FeedType            string // "scrape" or "rss"
+	RSSURL              string
 	ItemSelector        string
 	TitleSelector       string
 	LinkSelector        string
@@ -39,6 +41,8 @@ func initDB(dbPath string) error {
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		name TEXT NOT NULL,
 		url TEXT NOT NULL,
+		feed_type TEXT NOT NULL DEFAULT 'scrape',
+		rss_url TEXT NOT NULL DEFAULT '',
 		item_selector TEXT NOT NULL,
 		title_selector TEXT NOT NULL,
 		link_selector TEXT NOT NULL,
@@ -63,15 +67,20 @@ func initDB(dbPath string) error {
 	db.Exec(`ALTER TABLE feeds ADD COLUMN link_regex TEXT NOT NULL DEFAULT ''`)
 	db.Exec(`ALTER TABLE feeds ADD COLUMN description_regex TEXT NOT NULL DEFAULT ''`)
 	db.Exec(`ALTER TABLE feeds ADD COLUMN pub_date_regex TEXT NOT NULL DEFAULT ''`)
+	db.Exec(`ALTER TABLE feeds ADD COLUMN feed_type TEXT NOT NULL DEFAULT 'scrape'`)
+	db.Exec(`ALTER TABLE feeds ADD COLUMN rss_url TEXT NOT NULL DEFAULT ''`)
 
 	return nil
 }
 
 func CreateFeed(f *Feed) (int64, error) {
+	if f.FeedType == "" {
+		f.FeedType = "scrape"
+	}
 	result, err := db.Exec(
-		`INSERT INTO feeds (name, url, item_selector, title_selector, link_selector, description_selector, pub_date_selector, title_regex, link_regex, description_regex, pub_date_regex, refresh_minutes, cached_rss, last_refreshed)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		f.Name, f.URL, f.ItemSelector, f.TitleSelector, f.LinkSelector, f.DescriptionSelector,
+		`INSERT INTO feeds (name, url, feed_type, rss_url, item_selector, title_selector, link_selector, description_selector, pub_date_selector, title_regex, link_regex, description_regex, pub_date_regex, refresh_minutes, cached_rss, last_refreshed)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		f.Name, f.URL, f.FeedType, f.RSSURL, f.ItemSelector, f.TitleSelector, f.LinkSelector, f.DescriptionSelector,
 		f.PubDateSelector, f.TitleRegex, f.LinkRegex, f.DescriptionRegex, f.PubDateRegex,
 		f.RefreshMinutes, f.CachedRSS, f.LastRefreshed,
 	)
@@ -84,11 +93,11 @@ func CreateFeed(f *Feed) (int64, error) {
 func GetFeed(id int64) (*Feed, error) {
 	f := &Feed{}
 	err := db.QueryRow(
-		`SELECT id, name, url, item_selector, title_selector, link_selector, description_selector,
+		`SELECT id, name, url, feed_type, rss_url, item_selector, title_selector, link_selector, description_selector,
 		        pub_date_selector, title_regex, link_regex, description_regex, pub_date_regex,
 		        refresh_minutes, cached_rss, last_refreshed, created_at
 		 FROM feeds WHERE id = ?`, id,
-	).Scan(&f.ID, &f.Name, &f.URL, &f.ItemSelector, &f.TitleSelector, &f.LinkSelector,
+	).Scan(&f.ID, &f.Name, &f.URL, &f.FeedType, &f.RSSURL, &f.ItemSelector, &f.TitleSelector, &f.LinkSelector,
 		&f.DescriptionSelector, &f.PubDateSelector, &f.TitleRegex, &f.LinkRegex, &f.DescriptionRegex, &f.PubDateRegex,
 		&f.RefreshMinutes, &f.CachedRSS, &f.LastRefreshed, &f.CreatedAt)
 	if err != nil {
@@ -99,7 +108,7 @@ func GetFeed(id int64) (*Feed, error) {
 
 func ListFeeds() ([]Feed, error) {
 	rows, err := db.Query(
-		`SELECT id, name, url, item_selector, title_selector, link_selector, description_selector,
+		`SELECT id, name, url, feed_type, rss_url, item_selector, title_selector, link_selector, description_selector,
 		        pub_date_selector, title_regex, link_regex, description_regex, pub_date_regex,
 		        refresh_minutes, cached_rss, last_refreshed, created_at
 		 FROM feeds ORDER BY created_at DESC`,
@@ -112,7 +121,7 @@ func ListFeeds() ([]Feed, error) {
 	var feeds []Feed
 	for rows.Next() {
 		var f Feed
-		err := rows.Scan(&f.ID, &f.Name, &f.URL, &f.ItemSelector, &f.TitleSelector, &f.LinkSelector,
+		err := rows.Scan(&f.ID, &f.Name, &f.URL, &f.FeedType, &f.RSSURL, &f.ItemSelector, &f.TitleSelector, &f.LinkSelector,
 			&f.DescriptionSelector, &f.PubDateSelector, &f.TitleRegex, &f.LinkRegex, &f.DescriptionRegex, &f.PubDateRegex,
 		&f.RefreshMinutes, &f.CachedRSS, &f.LastRefreshed, &f.CreatedAt)
 		if err != nil {
@@ -130,11 +139,11 @@ func DeleteFeed(id int64) error {
 
 func UpdateFeed(f *Feed) error {
 	_, err := db.Exec(
-		`UPDATE feeds SET name = ?, url = ?, item_selector = ?, title_selector = ?, link_selector = ?,
+		`UPDATE feeds SET name = ?, url = ?, rss_url = ?, item_selector = ?, title_selector = ?, link_selector = ?,
 		 description_selector = ?, pub_date_selector = ?, title_regex = ?, link_regex = ?,
 		 description_regex = ?, pub_date_regex = ?, refresh_minutes = ?
 		 WHERE id = ?`,
-		f.Name, f.URL, f.ItemSelector, f.TitleSelector, f.LinkSelector,
+		f.Name, f.URL, f.RSSURL, f.ItemSelector, f.TitleSelector, f.LinkSelector,
 		f.DescriptionSelector, f.PubDateSelector, f.TitleRegex, f.LinkRegex,
 		f.DescriptionRegex, f.PubDateRegex, f.RefreshMinutes, f.ID,
 	)
@@ -151,12 +160,13 @@ func UpdateFeedCache(id int64, rssXML string) error {
 
 func FeedsDueForRefresh() ([]Feed, error) {
 	rows, err := db.Query(
-		`SELECT id, name, url, item_selector, title_selector, link_selector, description_selector,
+		`SELECT id, name, url, feed_type, rss_url, item_selector, title_selector, link_selector, description_selector,
 		        pub_date_selector, title_regex, link_regex, description_regex, pub_date_regex,
 		        refresh_minutes, cached_rss, last_refreshed, created_at
 		 FROM feeds
-		 WHERE last_refreshed IS NULL
-		    OR datetime(last_refreshed, '+' || refresh_minutes || ' minutes') <= datetime('now')`,
+		 WHERE feed_type = 'scrape'
+		   AND (last_refreshed IS NULL
+		    OR datetime(last_refreshed, '+' || refresh_minutes || ' minutes') <= datetime('now'))`,
 	)
 	if err != nil {
 		return nil, err
@@ -166,7 +176,7 @@ func FeedsDueForRefresh() ([]Feed, error) {
 	var feeds []Feed
 	for rows.Next() {
 		var f Feed
-		err := rows.Scan(&f.ID, &f.Name, &f.URL, &f.ItemSelector, &f.TitleSelector, &f.LinkSelector,
+		err := rows.Scan(&f.ID, &f.Name, &f.URL, &f.FeedType, &f.RSSURL, &f.ItemSelector, &f.TitleSelector, &f.LinkSelector,
 			&f.DescriptionSelector, &f.PubDateSelector, &f.TitleRegex, &f.LinkRegex, &f.DescriptionRegex, &f.PubDateRegex,
 		&f.RefreshMinutes, &f.CachedRSS, &f.LastRefreshed, &f.CreatedAt)
 		if err != nil {

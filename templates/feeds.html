@@ -7,6 +7,7 @@
     <thead>
         <tr>
             <th>Name</th>
+            <th>Type</th>
             <th>Source URL</th>
             <th>Refresh</th>
             <th>Last Refreshed</th>
@@ -17,11 +18,12 @@
         {{range .Feeds}}
         <tr>
             <td><a href="/feeds/{{.ID}}">{{.Name}}</a></td>
+            <td>{{if eq .FeedType "rss"}}RSS{{else}}Scrape{{end}}</td>
             <td><a href="{{.URL}}" target="_blank">{{.URL}}</a></td>
-            <td>{{.RefreshMinutes}}m</td>
-            <td>{{if .LastRefreshed}}{{.LastRefreshed.Format "2006-01-02 15:04"}}{{else}}Never{{end}}</td>
+            <td>{{if eq .FeedType "rss"}}&mdash;{{else}}{{.RefreshMinutes}}m{{end}}</td>
+            <td>{{if eq .FeedType "rss"}}&mdash;{{else}}{{if .LastRefreshed}}{{.LastRefreshed.Format "2006-01-02 15:04"}}{{else}}Never{{end}}{{end}}</td>
             <td>
-                <a href="/feeds/{{.ID}}/rss">RSS</a>
+                {{if eq .FeedType "rss"}}<a href="{{.RSSURL}}" target="_blank">RSS</a>{{else}}<a href="/feeds/{{.ID}}/rss">RSS</a>{{end}}
                 <button onclick="deleteFeed({{.ID}})" class="delete-btn">Delete</button>
             </td>
         </tr>
