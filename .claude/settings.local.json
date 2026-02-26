@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(go build:*)",
-      "Bash(sqlite3:*)"
+      "Bash(sqlite3:*)",
+      "Bash(openssl rand:*)",
+      "Bash(go get:*)"
     ]
   }
 }

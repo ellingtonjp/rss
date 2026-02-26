@@ -359,7 +359,7 @@ func handleOPML(w http.ResponseWriter, r *http.Request) {
 
 	outlines := make([]opmlOutline, len(feeds))
 	for i, f := range feeds {
-		xmlURL := fmt.Sprintf("http://%s/feeds/%d/rss", r.Host, f.ID)
+		xmlURL := fmt.Sprintf("http://%s/feeds/%d/rss?key=%s", r.Host, f.ID, apiKey)
 		if f.FeedType == "rss" {
 			xmlURL = f.RSSURL
 		}

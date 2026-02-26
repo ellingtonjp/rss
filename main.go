@@ -1,10 +1,15 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"log"
 	"net/http"
+	"os"
 	"time"
 )
+
+var apiKey string
 
 func logRequests(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -14,7 +19,27 @@ func logRequests(next http.Handler) http.Handler {
 	})
 }
 
+func requireAPIKey(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("key") != apiKey {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		next(w, r)
+	}
+}
+
 func main() {
+	apiKey = os.Getenv("RSS_API_KEY")
+	if apiKey == "" {
+		b := make([]byte, 32)
+		if _, err := rand.Read(b); err != nil {
+			log.Fatal("failed to generate API key:", err)
+		}
+		apiKey = hex.EncodeToString(b)
+		log.Fatal("No RSS_API_KEY set")
+	}
+
 	if err := initDB("feeds.db"); err != nil {
 		log.Fatal("failed to init database:", err)
 	}
@@ -34,11 +59,11 @@ func main() {
 	mux.HandleFunc("POST /feeds", handleCreateFeed)
 	mux.HandleFunc("POST /feeds/rss", handleCreateRSSFeed)
 	mux.HandleFunc("GET /feeds", handleListFeeds)
-	mux.HandleFunc("GET /feeds/opml", handleOPML)
+	mux.HandleFunc("GET /feeds/opml", requireAPIKey(handleOPML))
 	mux.HandleFunc("GET /feeds/{id}", handleFeedDetail)
 	mux.HandleFunc("GET /feeds/{id}/edit", handleEditFeed)
 	mux.HandleFunc("POST /feeds/{id}/edit", handleUpdateFeed)
-	mux.HandleFunc("GET /feeds/{id}/rss", handleFeedRSS)
+	mux.HandleFunc("GET /feeds/{id}/rss", requireAPIKey(handleFeedRSS))
 	mux.HandleFunc("DELETE /feeds/{id}", handleDeleteFeed)
 
 	log.Println("Server starting on http://localhost:8080")
