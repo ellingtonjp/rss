@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/hex"
 	"log"
 	"net/http"
@@ -21,7 +22,7 @@ func logRequests(next http.Handler) http.Handler {
 
 func requireAPIKey(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Query().Get("key") != apiKey {
+		if subtle.ConstantTimeCompare([]byte(r.URL.Query().Get("key")), []byte(apiKey)) == 0 {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
