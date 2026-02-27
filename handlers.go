@@ -15,13 +15,13 @@ var pageTmpl map[string]*template.Template
 func initTemplates() {
 	layout := "templates/layout.html"
 	pageTmpl = map[string]*template.Template{
-		"index":          template.Must(template.ParseFiles(layout, "templates/index.html")),
-		"preview":        template.Must(template.ParseFiles(layout, "templates/preview.html")),
-		"feeds":          template.Must(template.ParseFiles(layout, "templates/feeds.html")),
-		"feed_detail":    template.Must(template.ParseFiles(layout, "templates/feed_detail.html")),
-		"feed_edit":      template.Must(template.ParseFiles(layout, "templates/feed_edit.html")),
-		"feed_edit_rss":  template.Must(template.ParseFiles(layout, "templates/feed_edit_rss.html")),
-		"preview_results": template.Must(template.ParseFiles("templates/preview_results.html")),
+		"index":           template.Must(template.ParseFS(staticFiles, layout, "templates/index.html")),
+		"preview":         template.Must(template.ParseFS(staticFiles, layout, "templates/preview.html")),
+		"feeds":           template.Must(template.ParseFS(staticFiles, layout, "templates/feeds.html")),
+		"feed_detail":     template.Must(template.ParseFS(staticFiles, layout, "templates/feed_detail.html")),
+		"feed_edit":       template.Must(template.ParseFS(staticFiles, layout, "templates/feed_edit.html")),
+		"feed_edit_rss":   template.Must(template.ParseFS(staticFiles, layout, "templates/feed_edit_rss.html")),
+		"preview_results": template.Must(template.ParseFS(staticFiles, "templates/preview_results.html")),
 	}
 }
 

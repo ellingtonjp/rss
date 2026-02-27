@@ -3,12 +3,18 @@ package main
 import (
 	"crypto/rand"
 	"crypto/subtle"
+	"embed"
 	"encoding/hex"
+	"flag"
+	"io/fs"
 	"log"
 	"net/http"
 	"os"
 	"time"
 )
+
+//go:embed templates static
+var staticFiles embed.FS
 
 var apiKey string
 
@@ -31,6 +37,13 @@ func requireAPIKey(next http.HandlerFunc) http.HandlerFunc {
 }
 
 func main() {
+	dbPath := flag.String("db", "", "path to SQLite database file (required)")
+	flag.Parse()
+	if *dbPath == "" {
+		flag.Usage()
+		os.Exit(1)
+	}
+
 	apiKey = os.Getenv("RSS_API_KEY")
 	if apiKey == "" {
 		b := make([]byte, 32)
@@ -41,7 +54,7 @@ func main() {
 		log.Fatal("No RSS_API_KEY set")
 	}
 
-	if err := initDB("feeds.db"); err != nil {
+	if err := initDB(*dbPath); err != nil {
 		log.Fatal("failed to init database:", err)
 	}
 
@@ -51,7 +64,8 @@ func main() {
 	mux := http.NewServeMux()
 
 	// Static files
-	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
+	sub, _ := fs.Sub(staticFiles, "static")
+	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(sub))))
 
 	// Pages
 	mux.HandleFunc("GET /{$}", handleIndex)
